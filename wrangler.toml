@@ -2,6 +2,7 @@ name = "telegram-mod-bot"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
+# KV configured
 [[kv_namespaces]]
 binding = "BOT_DATA"
 id = "706302c6454f4484a229546cb8b8f862"
