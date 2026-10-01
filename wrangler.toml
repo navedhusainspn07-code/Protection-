@@ -11,3 +11,7 @@ id = "706302c6454f4484a229546cb8b8f862"
 # Comma-separated Telegram chat IDs: exactly 2 groups + 1 channel.
 # Example: -1001111111111,-1002222222222,-1003333333333
 ALLOWED_CHAT_IDS = "-1002673514865,-1001863881288,"
+
+[[hyperdrive]]
+binding = "DB"
+id = "a68fec723eb34747924f8ff8144aee3a"
