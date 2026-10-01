@@ -166,14 +166,20 @@ export default {
       const handled=await handleCommand(env,msg,cfg,c); if(handled) return new Response("OK");
     }
 
-
-    if (msg.chat.type !== "channel") {
-      await enforceJoin(env,msg,cfg);
-      if (inNight(cfg) && msg.from) { await del(env,msg); return new Response("OK"); }
-      if (cfg.mediaOff && (msg.photo||msg.video||msg.animation||msg.document||msg.sticker||msg.voice||msg.video_note||msg.audio)) { await del(env,msg); return new Response("OK"); }
-      if (msg.sticker && (msg.sticker.set_name && cfg.blockedPacks.includes(msg.sticker.set_name) || cfg.blockedStickers.includes(msg.sticker.file_unique_id))) { await del(env,msg); return new Response("OK"); }
-      if ((msg.text||msg.caption||"").includes("@admin")) { await reply(env,msg,"🚨 @admin alert"); }
-    }
-    return new Response("OK");
-  }
-};
+if ((msg.text||msg.caption||"").toLowerCase().includes("@admin")) {
+        const esc = (s:string)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        const nm = (u:any)=>esc([u.first_name,u.last_name].filter(Boolean).join(" ") || "Admin");
+        const r: any = await tg(env,"getChatAdministrators",{chat_id:msg.chat.id});
+        const mentions = (r?.result||[])
+          .filter((a:any)=>!a.user.is_bot)
+          .map((a:any)=>`<a href="tg://user?id=${a.user.id}">${nm(a.user)}</a>`)
+          .join(" ");
+        const who = msg.from ? nm(msg.from) : "a member";
+        await tg(env,"sendMessage",{
+          chat_id:msg.chat.id,
+          text:`🚨 Admin attention requested by <b>${who}</b>:\n${mentions}`,
+          parse_mode:"HTML",
+          reply_parameters:{message_id:msg.message_id}
+        });
+      }
+    
