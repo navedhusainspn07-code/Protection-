@@ -153,6 +153,10 @@ export default {
     if (request.method !== "POST") return new Response("Method Not Allowed",{status:405});
     let update: Update; try { update=await request.json(); } catch { return new Response("Bad Request",{status:400}); }
     const msg=update.message || update.channel_post;
+    if (msg?.text && command(msg.text)?.name === "chatid") {
+  await reply(env, msg, `Chat ID: ${msg.chat.id}`);
+  return new Response("OK");
+}
     if (!msg || !allowed(env,msg.chat.id)) return new Response("OK");
 
     const cfg=await getConfig(env,msg.chat.id);
