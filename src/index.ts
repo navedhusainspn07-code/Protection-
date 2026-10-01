@@ -198,7 +198,13 @@ Add me to your group as admin (with delete permission) to use these.
     const c=command(msg.text);
     if (c) {
       if (c.name === "admin") return reply(env,msg,"@admin").then(()=>new Response("OK"));
-      const handled=await handleCommand(env,msg,cfg,c); if(handled) return new Response("OK");
+      const chk: any = msg.from ? await tg(env,"getChatMember",{chat_id:msg.chat.id,user_id:msg.from.id}) : null;
+      const isAdm = ["administrator","creator"].includes(chk?.result?.status)
+        || msg.from?.username === "GroupAnonymousBot"
+        || msg.chat.type === "channel";
+      if (isAdm) {
+        const handled=await handleCommand(env,msg,cfg,c); if(handled) return new Response("OK");
+      }
     }
 
 if (msg.chat.type !== "channel") {
