@@ -1,0 +1,12 @@
+name = "telegram-mod-bot"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[[kv_namespaces]]
+binding = "BOT_DATA"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+# Comma-separated Telegram chat IDs: exactly 2 groups + 1 channel.
+# Example: -1001111111111,-1002222222222,-1003333333333
+ALLOWED_CHAT_IDS = "-1001111111111,-1002222222222,-1003333333333"
