@@ -166,7 +166,12 @@ export default {
       const handled=await handleCommand(env,msg,cfg,c); if(handled) return new Response("OK");
     }
 
-if ((msg.text||msg.caption||"").toLowerCase().includes("@admin")) {
+if (msg.chat.type !== "channel") {
+      await enforceJoin(env,msg,cfg);
+      if (inNight(cfg) && msg.from) { await del(env,msg); return new Response("OK"); }
+      if (cfg.mediaOff && (msg.photo||msg.video||msg.animation||msg.document||msg.sticker||msg.voice||msg.video_note||msg.audio)) { await del(env,msg); return new Response("OK"); }
+      if (msg.sticker && (msg.sticker.set_name && cfg.blockedPacks.includes(msg.sticker.set_name) || cfg.blockedStickers.includes(msg.sticker.file_unique_id))) { await del(env,msg); return new Response("OK"); }
+      if ((msg.text||msg.caption||"").toLowerCase().includes("@admin")) {
         const esc = (s:string)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
         const nm = (u:any)=>esc([u.first_name,u.last_name].filter(Boolean).join(" ") || "Admin");
         const r: any = await tg(env,"getChatAdministrators",{chat_id:msg.chat.id});
@@ -182,4 +187,8 @@ if ((msg.text||msg.caption||"").toLowerCase().includes("@admin")) {
           reply_parameters:{message_id:msg.message_id}
         });
       }
+    }
+    return new Response("OK");
+  }
+};
     
