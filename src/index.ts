@@ -157,6 +157,41 @@ export default {
   await reply(env, msg, `Chat ID: ${msg.chat.id}`);
   return new Response("OK");
 }
+    if (msg?.chat.type === "private" && msg.text) {
+      const pc = command(msg.text);
+      if (pc && (pc.name === "start" || pc.name === "help")) {
+        await reply(env, msg,
+`🤖 Moderation Bot — Commands
+
+📸 Media
+/media off — delete photos, videos, stickers, voice, files
+/media on — allow media again
+
+🌙 Night mode (IST)
+/Setnight HH:MM HH:MM — set start and end time
+/Night on — turn on
+/Night off — turn off
+
+🔒 Force join
+/Setjoin — turn on
+/Setjoin off — turn off
+
+🎭 Stickers (reply to a sticker)
+/Blocksticker — block that sticker
+/Unblocksticker — unblock it
+/Blockpack — block the whole pack
+/Unblockpack — unblock the pack
+/Stickerlist — show blocked list
+
+🚨 @admin — call the group admins
+
+Add me to your group as admin (with delete permission) to use these.
+
+👨‍💻 Developed by ~ @mrixdu`);
+        return new Response("OK");
+      }
+    }
+    
     if (!msg || !allowed(env,msg.chat.id)) return new Response("OK");
 
     const cfg=await getConfig(env,msg.chat.id);
