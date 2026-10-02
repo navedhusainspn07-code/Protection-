@@ -25,12 +25,13 @@ interface Message {
   reply_to_message?: Message;
   forward_origin?: { type?: string; chat?: Chat; message_id?: number };
 }
-interface Update { update_id: number; message?: Message; channel_post?: Message }
+interface Update { update_id: number; message?: Message; channel_post?: Message; callback_query?: { id: string; from: User; data?: string; message?: Message } }
 interface Config {
   mediaOff: boolean;
   night: { enabled: boolean; start: string; end: string };
   joinEnabled: boolean;
   joinChannel?: string;
+  joinLink?: string;
   blockedPacks: string[];
   blockedStickers: string[];
 }
@@ -111,8 +112,8 @@ async function handleCommand(env: Env, msg: Message, cfg: Config, c: ReturnType<
       cfg.night.enabled=c.args[0] === "on"; await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,cfg.night.enabled ? `🌙 Night Mode ON (${cfg.night.start}–${cfg.night.end} IST).` : "☀️ Night Mode OFF."); return true;
     case "setjoin":
       if (c.args[0]?.toLowerCase() === "off") { cfg.joinEnabled=false; await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,"✅ Force Join OFF."); return true; }
-      if (!c.args[0]) { await reply(env,msg,"Usage: /Setjoin @channelusername (or /Setjoin off)"); return true; }
-      cfg.joinChannel=c.args[0]; cfg.joinEnabled=true; await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,`✅ Force Join ON for ${c.args[0]}.`); return true;
+      if (!c.args[0]) { await reply(env,msg,"Usage: /Setjoin @channel  or  /Setjoin -100123 https://t.me/+invitelink  (or /Setjoin off)"); return true; }
+      cfg.joinChannel=c.args[0]; cfg.joinLink=c.args[1] || (c.args[0].startsWith("@") ? `https://t.me/${c.args[0].slice(1)}` : undefined); cfg.joinEnabled=true; await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,`✅ Force Join ON for ${c.args[0]}.`); return true;
     case "blocksticker": {
       const s=msg.reply_to_message?.sticker; if(!s) { await reply(env,msg,"Reply to a sticker with /Blocksticker."); return true; }
       if(!cfg.blockedStickers.includes(s.file_unique_id)) cfg.blockedStickers.push(s.file_unique_id); await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,"🚫 Sticker blocked."); return true;
@@ -135,19 +136,31 @@ async function handleCommand(env: Env, msg: Message, cfg: Config, c: ReturnType<
   }
 }
 
-async function enforceJoin(env: Env, msg: Message, cfg: Config) {
-  if (!cfg.joinEnabled || !msg.from || msg.chat.type === "channel") return;
+async function enforceJoin(env: Env, msg: Message, cfg: Config): Promise<boolean> {
+  if (!cfg.joinEnabled || !msg.from || msg.from.is_bot || msg.from.username === "GroupAnonymousBot" || msg.chat.type === "channel") return false;
   const channel = cfg.joinChannel || env.FORCE_JOIN_CHANNEL;
-  if (!channel) return;
-  try {
-    const r = await tg(env,"getChatMember",{chat_id:channel,user_id:msg.from.id});
-    if (!r?.ok) return;
-    const s=r?.result?.status;
-    if (!["member","administrator","creator"].includes(s)) {
-      await del(env,msg);
-      await tg(env,"sendMessage",{chat_id:msg.chat.id,text:"🔒 Please join the required channel before sending messages."});
-    }
-  } catch {}
+  if (!channel) return false;
+  const gm: any = await tg(env,"getChatMember",{chat_id:msg.chat.id,user_id:msg.from.id});
+  if (["administrator","creator"].includes(gm?.result?.status)) return false;
+  const r: any = await tg(env,"getChatMember",{chat_id:channel,user_id:msg.from.id});
+  if (!r?.ok) return false;
+  if (["member","administrator","creator"].includes(r.result?.status)) return false;
+  await del(env,msg);
+  const off = {can_send_messages:false,can_send_audios:false,can_send_documents:false,can_send_photos:false,can_send_videos:false,can_send_video_notes:false,can_send_voice_notes:false,can_send_polls:false,can_send_other_messages:false,can_add_web_page_previews:false};
+  await tg(env,"restrictChatMember",{chat_id:msg.chat.id,user_id:msg.from.id,use_independent_chat_permissions:true,permissions:off,until_date:Math.floor(Date.now()/1000)+86400});
+  const u = new Date(Date.now()+86400000+19800000);
+  const p = (n:number)=>String(n).padStart(2,"0");
+  const when = `${p(u.getUTCDate())}/${p(u.getUTCMonth()+1)}/${u.getUTCFullYear()} ${p(u.getUTCHours())}:${p(u.getUTCMinutes())}:${p(u.getUTCSeconds())}`;
+  const esc = (s:string)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const name = esc([msg.from.first_name].filter(Boolean).join(" ") || "User");
+  const link = cfg.joinLink || (channel.startsWith("@") ? `https://t.me/${channel.slice(1)}` : "");
+  const rows: any[] = [];
+  if (link) rows.push([{text:"📢 Subscribe to channel",url:link}]);
+  rows.push([{text:"✅ OK | I subscribed",callback_data:`jv:${msg.from.id}`}]);
+  await tg(env,"sendMessage",{chat_id:msg.chat.id,parse_mode:"HTML",
+    text:`<a href="tg://user?id=${msg.from.id}">${name}</a> [${msg.from.id}] to be accepted in the group, please subscribe to our channel. Once joined, click the button below.\n\n<b>Action:</b> Muted 🔇 until ${when} IST.`,
+    reply_markup:{inline_keyboard:rows}});
+  return true;
 }
 
 export default {
@@ -156,6 +169,29 @@ export default {
     if (request.method !== "POST") return new Response("Method Not Allowed",{status:405});
     let update: Update; try { update=await request.json(); } catch { return new Response("Bad Request",{status:400}); }
     const msg=update.message || update.channel_post;
+    const cq = update.callback_query;
+    if (cq?.data?.startsWith("jv:") && cq.message) {
+      const chatId = cq.message.chat.id;
+      if (!allowed(env,chatId)) return new Response("OK");
+      const target = Number(cq.data.slice(3));
+      if (cq.from.id !== target) {
+        await tg(env,"answerCallbackQuery",{callback_query_id:cq.id,text:"This button is not for you.",show_alert:true});
+        return new Response("OK");
+      }
+      const cfg = await getConfig(env,chatId);
+      const channel = cfg.joinChannel || env.FORCE_JOIN_CHANNEL;
+      const r: any = channel ? await tg(env,"getChatMember",{chat_id:channel,user_id:target}) : null;
+      if (!["member","administrator","creator"].includes(r?.result?.status)) {
+        await tg(env,"answerCallbackQuery",{callback_query_id:cq.id,text:"❌ Please join the channel first.",show_alert:true});
+        return new Response("OK");
+      }
+      const g: any = await tg(env,"getChat",{chat_id:chatId});
+      const perms = g?.result?.permissions || {can_send_messages:true,can_send_photos:true,can_send_videos:true,can_send_other_messages:true,can_send_polls:true,can_add_web_page_previews:true};
+      await tg(env,"restrictChatMember",{chat_id:chatId,user_id:target,use_independent_chat_permissions:true,permissions:perms});
+      await tg(env,"answerCallbackQuery",{callback_query_id:cq.id});
+      await tg(env,"editMessageText",{chat_id:chatId,message_id:cq.message.message_id,text:"✅ Verified — welcome to the group!",reply_markup:{inline_keyboard:[]}});
+      return new Response("OK");
+    }
     if (msg?.text && command(msg.text)?.name === "chatid") {
   await reply(env, msg, `Chat ID: ${msg.chat.id}`);
   return new Response("OK");
@@ -211,7 +247,7 @@ Add me to your group as admin (with delete permission) to use these.
     }
 
 if (msg.chat.type !== "channel") {
-      await enforceJoin(env,msg,cfg);
+      if (await enforceJoin(env,msg,cfg)) return new Response("OK");
       if (inNight(cfg) && msg.from) { await del(env,msg); return new Response("OK"); }
       if (cfg.mediaOff && (msg.photo||msg.video||msg.animation||msg.document||msg.sticker||msg.voice||msg.video_note||msg.audio)) { await del(env,msg); return new Response("OK"); }
       if (msg.sticker && (msg.sticker.set_name && cfg.blockedPacks.includes(msg.sticker.set_name) || cfg.blockedStickers.includes(msg.sticker.file_unique_id))) { await del(env,msg); return new Response("OK"); }
