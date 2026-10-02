@@ -24,6 +24,7 @@ interface Message {
   audio?: unknown;
   reply_to_message?: Message;
   forward_origin?: { type?: string; chat?: Chat; message_id?: number };
+is_automatic_forward?: boolean;
 }
 interface Update { update_id: number; message?: Message; channel_post?: Message; callback_query?: { id: string; from: User; data?: string; message?: Message } }
 interface Config {
