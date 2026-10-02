@@ -246,7 +246,7 @@ Add me to your group as admin (with delete permission) to use these.
       }
     }
 
-if (msg.chat.type !== "channel") {
+if (msg.chat.type !== "channel" && !msg.is_automatic_forward) {
       if (await enforceJoin(env,msg,cfg)) return new Response("OK");
       if (inNight(cfg) && msg.from) { await del(env,msg); return new Response("OK"); }
       if (cfg.mediaOff && (msg.photo||msg.video||msg.animation||msg.document||msg.sticker||msg.voice||msg.video_note||msg.audio)) { await del(env,msg); return new Response("OK"); }
