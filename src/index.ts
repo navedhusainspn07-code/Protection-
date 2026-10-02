@@ -30,6 +30,7 @@ interface Config {
   mediaOff: boolean;
   night: { enabled: boolean; start: string; end: string };
   joinEnabled: boolean;
+  joinChannel?: string;
   blockedPacks: string[];
   blockedStickers: string[];
 }
@@ -110,7 +111,8 @@ async function handleCommand(env: Env, msg: Message, cfg: Config, c: ReturnType<
       cfg.night.enabled=c.args[0] === "on"; await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,cfg.night.enabled ? `🌙 Night Mode ON (${cfg.night.start}–${cfg.night.end} IST).` : "☀️ Night Mode OFF."); return true;
     case "setjoin":
       if (c.args[0]?.toLowerCase() === "off") { cfg.joinEnabled=false; await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,"✅ Force Join OFF."); return true; }
-      cfg.joinEnabled=true; await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,"✅ Force Join ON. Set FORCE_JOIN_CHANNEL to the channel users must join."); return true;
+      if (!c.args[0]) { await reply(env,msg,"Usage: /Setjoin @channelusername (or /Setjoin off)"); return true; }
+      cfg.joinChannel=c.args[0]; cfg.joinEnabled=true; await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,`✅ Force Join ON for ${c.args[0]}.`); return true;
     case "blocksticker": {
       const s=msg.reply_to_message?.sticker; if(!s) { await reply(env,msg,"Reply to a sticker with /Blocksticker."); return true; }
       if(!cfg.blockedStickers.includes(s.file_unique_id)) cfg.blockedStickers.push(s.file_unique_id); await saveConfig(env,msg.chat.id,cfg); await reply(env,msg,"🚫 Sticker blocked."); return true;
@@ -135,10 +137,11 @@ async function handleCommand(env: Env, msg: Message, cfg: Config, c: ReturnType<
 
 async function enforceJoin(env: Env, msg: Message, cfg: Config) {
   if (!cfg.joinEnabled || !msg.from || msg.chat.type === "channel") return;
-  const channel = env.FORCE_JOIN_CHANNEL;
+  const channel = cfg.joinChannel || env.FORCE_JOIN_CHANNEL;
   if (!channel) return;
   try {
     const r = await tg(env,"getChatMember",{chat_id:channel,user_id:msg.from.id});
+    if (!r?.ok) return;
     const s=r?.result?.status;
     if (!["member","administrator","creator"].includes(s)) {
       await del(env,msg);
